@@ -46,3 +46,9 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+
+# Planning documents (local only)
+plan/
+
+# Claude Code guidance (local only)
+CLAUDE.md
