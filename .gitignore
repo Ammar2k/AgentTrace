@@ -52,3 +52,6 @@ plan/
 
 # Claude Code guidance (local only)
 CLAUDE.md
+
+# Database (local only — delete this file to reset the schema)
+agenttrace.db
