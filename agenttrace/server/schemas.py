@@ -69,6 +69,10 @@ class ExecutionDetailResponse(ExecutionResponse):
     output: dict[str, Any] | None = None
     error: str | None = None
     retry_count: int
+    duration_seconds: float = 0.0
+    timeline_left_percent: float = 0.0
+    timeline_width_percent: float = 0.0
+    timeline_depth: int = 0
     tool_calls: list["ToolCallDetailResponse"] = Field(default_factory=list)
 
 

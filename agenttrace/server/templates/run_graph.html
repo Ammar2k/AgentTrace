@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}{{ run.name }} Graph - AgentTrace{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <p><a href="/runs/{{ run.id }}">Back to run detail</a></p>
+    <h1>{{ run.name }} Communication</h1>
+    <div class="summary">
+        <span class="badge {{ run.status }}">{{ run.status }}</span>
+        <span>{{ run.messages|length }} messages</span>
+    </div>
+</section>
+
+<section>
+    <h2>Agent Messages</h2>
+    {% if message_edges %}
+    <table>
+        <thead>
+            <tr>
+                <th>From</th>
+                <th>To</th>
+                <th>Messages</th>
+                <th>Last Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for edge in message_edges %}
+            <tr>
+                <td>{{ edge.from_agent }}</td>
+                <td>{{ edge.to_agent }}</td>
+                <td>{{ edge.count }}</td>
+                <td>{{ edge.last_message_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No agent-to-agent messages recorded for this run.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Message Log</h2>
+    {% if run.messages %}
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Content</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for message in run.messages %}
+            <tr>
+                <td>{{ message.timestamp }}</td>
+                <td>{{ message.from_agent }}</td>
+                <td>{{ message.to_agent }}</td>
+                <td><pre>{{ message.content }}</pre></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No messages recorded for this run.</p>
+    {% endif %}
+</section>
+{% endblock %}

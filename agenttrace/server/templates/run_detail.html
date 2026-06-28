@@ -11,6 +11,7 @@
         <span>{{ run.started_at }}{% if run.ended_at %} to {{ run.ended_at }}{% endif %}</span>
         <span>{{ run.total_tokens }} tokens</span>
         <span>${{ "%.4f"|format(run.total_cost_usd) }}</span>
+        <a href="/runs/{{ run.id }}/graph">Communication graph</a>
     </div>
 </section>
 
@@ -20,6 +21,32 @@
     <pre>{{ run.metadata }}</pre>
 </section>
 {% endif %}
+
+<section>
+    <h2>Timeline</h2>
+    {% if run.executions %}
+    <div class="timeline">
+        {% for execution in run.executions %}
+        <div class="timeline-row">
+            <div class="timeline-label" style="padding-left: {{ execution.timeline_depth * 18 }}px;">
+                {{ execution.agent_name }}
+            </div>
+            <div class="timeline-track">
+                <div
+                    class="timeline-bar {{ execution.status }}"
+                    style="left: {{ '%.2f'|format(execution.timeline_left_percent) }}%; width: {{ '%.2f'|format(execution.timeline_width_percent) }}%;"
+                    title="{{ execution.agent_name }}: {{ '%.3f'|format(execution.duration_seconds) }}s"
+                >
+                    {{ '%.3f'|format(execution.duration_seconds) }}s
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No executions recorded for this run.</p>
+    {% endif %}
+</section>
 
 <section>
     <h2>Executions</h2>

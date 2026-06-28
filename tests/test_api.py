@@ -155,3 +155,65 @@ def test_dashboard_run_detail_renders_nested_trace_data(client):
     assert "researcher" in response.text
     assert "web_search" in response.text
     assert "writer" in response.text
+
+
+def test_dashboard_run_graph_groups_messages(client):
+    run = client.post("/api/runs", json={"name": "graph-run"}).json()
+    client.post(
+        f"/api/runs/{run['id']}/messages",
+        json={"from_agent": "researcher", "to_agent": "writer", "content": {"n": 1}},
+    )
+    client.post(
+        f"/api/runs/{run['id']}/messages",
+        json={"from_agent": "researcher", "to_agent": "writer", "content": {"n": 2}},
+    )
+    client.post(
+        f"/api/runs/{run['id']}/messages",
+        json={"from_agent": "planner", "to_agent": "researcher", "content": {"n": 3}},
+    )
+
+    response = client.get(f"/runs/{run['id']}/graph")
+
+    assert response.status_code == 200
+    assert "graph-run Communication" in response.text
+    assert "researcher" in response.text
+    assert "writer" in response.text
+    assert "<td>2</td>" in response.text
+    assert "planner" in response.text
+
+
+def test_run_detail_includes_execution_timeline(client):
+    run = client.post("/api/runs", json={"name": "timeline-run"}).json()
+    first = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "planner"},
+    ).json()
+    second = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "researcher", "parent_id": first["id"]},
+    ).json()
+    client.patch(
+        f"/api/executions/{first['id']}",
+        json={
+            "status": "completed",
+            "ended_at": "2026-06-28T10:00:02",
+        },
+    )
+    client.patch(
+        f"/api/executions/{second['id']}",
+        json={
+            "status": "completed",
+            "ended_at": "2026-06-28T10:00:03",
+        },
+    )
+
+    api_response = client.get(f"/api/runs/{run['id']}")
+    page_response = client.get(f"/runs/{run['id']}")
+
+    executions = api_response.json()["executions"]
+    assert "timeline_left_percent" in executions[0]
+    assert "timeline_width_percent" in executions[0]
+    assert executions[1]["timeline_depth"] == 1
+    assert page_response.status_code == 200
+    assert "Timeline" in page_response.text
+    assert "timeline-bar completed" in page_response.text
