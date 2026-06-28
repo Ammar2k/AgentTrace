@@ -28,13 +28,14 @@
     <div class="timeline">
         {% for execution in run.executions %}
         <div class="timeline-row">
-            <div class="timeline-label" style="padding-left: {{ execution.timeline_depth * 18 }}px;">
+            <div class="timeline-label" data-depth="{{ execution.timeline_depth }}">
                 {{ execution.agent_name }}
             </div>
             <div class="timeline-track">
                 <div
                     class="timeline-bar {{ execution.status }}"
-                    style="left: {{ '%.2f'|format(execution.timeline_left_percent) }}%; width: {{ '%.2f'|format(execution.timeline_width_percent) }}%;"
+                    data-left="{{ '%.2f'|format(execution.timeline_left_percent) }}"
+                    data-width="{{ '%.2f'|format(execution.timeline_width_percent) }}"
                     title="{{ execution.agent_name }}: {{ '%.3f'|format(execution.duration_seconds) }}s"
                 >
                     {{ '%.3f'|format(execution.duration_seconds) }}s
@@ -144,4 +145,8 @@
     <p class="empty">No messages recorded for this run.</p>
     {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/timeline.js') }}"></script>
 {% endblock %}
