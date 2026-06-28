@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # --- WorkflowRun ---
@@ -26,6 +26,11 @@ class RunResponse(BaseModel):
     total_cost_usd: float
 
     model_config = {"from_attributes": True}
+
+class RunDetailResponse(RunResponse):
+    metadata: dict[str, Any] | None = None
+    executions: list["ExecutionDetailResponse"] = Field(default_factory=list)
+    messages: list["MessageDetailResponse"] = Field(default_factory=list)
 
 
 # --- AgentExecution ---
@@ -59,6 +64,13 @@ class ExecutionResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class ExecutionDetailResponse(ExecutionResponse):
+    input: dict[str, Any] | None = None
+    output: dict[str, Any] | None = None
+    error: str | None = None
+    retry_count: int
+    tool_calls: list["ToolCallDetailResponse"] = Field(default_factory=list)
+
 
 # --- ToolCall ---
 
@@ -81,6 +93,11 @@ class ToolCallResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class ToolCallDetailResponse(ToolCallResponse):
+    arguments: dict[str, Any] | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+
 
 # --- Message ---
 
@@ -97,3 +114,6 @@ class MessageResponse(BaseModel):
     timestamp: datetime
 
     model_config = {"from_attributes": True}
+
+class MessageDetailResponse(MessageResponse):
+    content: dict[str, Any] | None = None

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ run.name }} - AgentTrace{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <p><a href="/">Back to runs</a></p>
+    <h1>{{ run.name }}</h1>
+    <div class="summary">
+        <span class="badge {{ run.status }}">{{ run.status }}</span>
+        <span>{{ run.started_at }}{% if run.ended_at %} to {{ run.ended_at }}{% endif %}</span>
+        <span>{{ run.total_tokens }} tokens</span>
+        <span>${{ "%.4f"|format(run.total_cost_usd) }}</span>
+    </div>
+</section>
+
+{% if run.metadata %}
+<section>
+    <h2>Metadata</h2>
+    <pre>{{ run.metadata }}</pre>
+</section>
+{% endif %}
+
+<section>
+    <h2>Executions</h2>
+    {% if run.executions %}
+    <div class="execution-list">
+        {% for execution in run.executions %}
+        <article class="execution">
+            <div class="execution-header">
+                <h3>{{ execution.agent_name }}</h3>
+                <span class="badge {{ execution.status }}">{{ execution.status }}</span>
+            </div>
+            <dl>
+                <dt>Model</dt>
+                <dd>{{ execution.model or "" }}</dd>
+                <dt>Parent</dt>
+                <dd>{{ execution.parent_id or "" }}</dd>
+                <dt>Started</dt>
+                <dd>{{ execution.started_at }}</dd>
+                <dt>Ended</dt>
+                <dd>{{ execution.ended_at or "" }}</dd>
+                <dt>Tokens</dt>
+                <dd>{{ execution.tokens_in }} in / {{ execution.tokens_out }} out</dd>
+            </dl>
+
+            {% if execution.input %}
+            <h4>Input</h4>
+            <pre>{{ execution.input }}</pre>
+            {% endif %}
+
+            {% if execution.output %}
+            <h4>Output</h4>
+            <pre>{{ execution.output }}</pre>
+            {% endif %}
+
+            {% if execution.error %}
+            <h4>Error</h4>
+            <pre class="error-text">{{ execution.error }}</pre>
+            {% endif %}
+
+            {% if execution.tool_calls %}
+            <h4>Tool Calls</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tool</th>
+                        <th>Status</th>
+                        <th>Arguments</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tool_call in execution.tool_calls %}
+                    <tr>
+                        <td>{{ tool_call.tool_name }}</td>
+                        <td><span class="badge {{ tool_call.status }}">{{ tool_call.status }}</span></td>
+                        <td><pre>{{ tool_call.arguments }}</pre></td>
+                        <td><pre>{{ tool_call.result }}</pre></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No executions recorded for this run.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Messages</h2>
+    {% if run.messages %}
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Content</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for message in run.messages %}
+            <tr>
+                <td>{{ message.timestamp }}</td>
+                <td>{{ message.from_agent }}</td>
+                <td>{{ message.to_agent }}</td>
+                <td><pre>{{ message.content }}</pre></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No messages recorded for this run.</p>
+    {% endif %}
+</section>
+{% endblock %}
