@@ -31,6 +31,7 @@ class RunDetailResponse(RunResponse):
     metadata: dict[str, Any] | None = None
     executions: list["ExecutionDetailResponse"] = Field(default_factory=list)
     messages: list["MessageDetailResponse"] = Field(default_factory=list)
+    agent_summary: list["AgentSummaryResponse"] = Field(default_factory=list)
 
 
 # --- AgentExecution ---
@@ -61,6 +62,7 @@ class ExecutionResponse(BaseModel):
     ended_at: datetime | None
     tokens_in: int
     tokens_out: int
+    cost_usd: float
 
     model_config = {"from_attributes": True}
 
@@ -74,6 +76,17 @@ class ExecutionDetailResponse(ExecutionResponse):
     timeline_width_percent: float = 0.0
     timeline_depth: int = 0
     tool_calls: list["ToolCallDetailResponse"] = Field(default_factory=list)
+
+
+class AgentSummaryResponse(BaseModel):
+    agent_name: str
+    calls: int
+    failures: int
+    total_duration_seconds: float
+    total_tokens: int
+    tokens_in: int
+    tokens_out: int
+    total_cost_usd: float
 
 
 # --- ToolCall ---

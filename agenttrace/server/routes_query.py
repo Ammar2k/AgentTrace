@@ -45,6 +45,8 @@ def dashboard_home(request: Request, db: Session = Depends(get_db)):
         "runs.html",
         {
             "runs": runs,
+            "cost_chart": _cost_chart(runs),
+            "latency_chart": _latency_chart(runs),
         },
     )
 
@@ -93,6 +95,7 @@ def _run_detail(run: WorkflowRun) -> dict[str, Any]:
             "ended_at": execution.ended_at,
             "tokens_in": execution.tokens_in,
             "tokens_out": execution.tokens_out,
+            "cost_usd": execution.cost_usd,
             "input": _load_json(execution.input_),
             "output": _load_json(execution.output),
             "error": execution.error,
@@ -126,6 +129,7 @@ def _run_detail(run: WorkflowRun) -> dict[str, Any]:
         "total_cost_usd": run.total_cost_usd,
         "metadata": _load_json(run.metadata_),
         "executions": executions,
+        "agent_summary": _agent_summary(executions),
         "messages": [
             {
                 "id": message.id,
@@ -173,6 +177,81 @@ def _execution_depth(execution: dict[str, Any], executions: list[dict[str, Any]]
         parent_id = by_id[parent_id]["parent_id"]
 
     return depth
+
+
+def _agent_summary(executions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_agent: dict[str, dict[str, Any]] = {}
+
+    for execution in executions:
+        agent_name = execution["agent_name"]
+        if agent_name not in by_agent:
+            by_agent[agent_name] = {
+                "agent_name": agent_name,
+                "calls": 0,
+                "failures": 0,
+                "total_duration_seconds": 0.0,
+                "total_tokens": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "total_cost_usd": 0.0,
+            }
+
+        summary = by_agent[agent_name]
+        summary["calls"] += 1
+        summary["failures"] += 1 if execution["status"] == "failed" else 0
+        summary["total_duration_seconds"] += execution["duration_seconds"]
+        summary["tokens_in"] += execution["tokens_in"]
+        summary["tokens_out"] += execution["tokens_out"]
+        summary["total_tokens"] += execution["tokens_in"] + execution["tokens_out"]
+        summary["total_cost_usd"] += execution["cost_usd"]
+
+    return sorted(
+        by_agent.values(),
+        key=lambda summary: (-summary["total_cost_usd"], summary["agent_name"]),
+    )
+
+
+def _cost_chart(runs: list[WorkflowRun]) -> dict[str, list[Any]]:
+    ordered_runs = sorted(runs, key=lambda run: run.started_at)
+
+    return {
+        "labels": [run.name for run in ordered_runs],
+        "values": [run.total_cost_usd for run in ordered_runs],
+    }
+
+
+def _latency_chart(runs: list[WorkflowRun]) -> dict[str, list[Any]]:
+    by_agent: dict[str, dict[str, float | int]] = {}
+
+    for run in runs:
+        for execution in run.executions:
+            if execution.ended_at is None:
+                continue
+
+            duration_seconds = max((execution.ended_at - execution.started_at).total_seconds(), 0.0)
+            if execution.agent_name not in by_agent:
+                by_agent[execution.agent_name] = {
+                    "total_duration_seconds": 0.0,
+                    "calls": 0,
+                }
+
+            by_agent[execution.agent_name]["total_duration_seconds"] += duration_seconds
+            by_agent[execution.agent_name]["calls"] += 1
+
+    summaries = [
+        {
+            "agent_name": agent_name,
+            "average_duration_seconds": values["total_duration_seconds"] / values["calls"],
+        }
+        for agent_name, values in by_agent.items()
+        if values["calls"] > 0
+    ]
+    summaries.sort(key=lambda summary: (-summary["average_duration_seconds"], summary["agent_name"]))
+
+    return {
+        "labels": [summary["agent_name"] for summary in summaries],
+        "values": [summary["average_duration_seconds"] for summary in summaries],
+    }
 
 
 def _message_edges(run: WorkflowRun) -> list[dict[str, Any]]:

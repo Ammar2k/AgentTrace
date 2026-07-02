@@ -43,6 +43,7 @@ class AgentExecution(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     tokens_in: Mapped[int] = mapped_column(Integer, default=0)
     tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
 
     run: Mapped["WorkflowRun"] = relationship(back_populates="executions")

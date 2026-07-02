@@ -7,6 +7,24 @@
     <h1>Runs</h1>
 </section>
 
+<section>
+    <h2>Metrics</h2>
+    <div class="chart-grid">
+        <div class="chart-panel">
+            <h3>Cost per Run</h3>
+            <div class="chart-frame">
+                <canvas id="cost-chart"></canvas>
+            </div>
+        </div>
+        <div class="chart-panel">
+            <h3>Average Latency by Agent</h3>
+            <div class="chart-frame">
+                <canvas id="latency-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</section>
+
 {% if runs %}
 <table>
     <thead>
@@ -35,4 +53,63 @@
 {% else %}
 <p class="empty">No runs recorded yet.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const costChart = {{ cost_chart|tojson }};
+const latencyChart = {{ latency_chart|tojson }};
+
+new Chart(document.getElementById("cost-chart"), {
+    type: "bar",
+    data: {
+        labels: costChart.labels,
+        datasets: [{
+            label: "Cost (USD)",
+            data: costChart.values,
+            backgroundColor: "#2563eb",
+        }],
+    },
+    options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false,
+            },
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+            },
+        },
+    },
+});
+
+new Chart(document.getElementById("latency-chart"), {
+    type: "bar",
+    data: {
+        labels: latencyChart.labels,
+        datasets: [{
+            label: "Average duration (seconds)",
+            data: latencyChart.values,
+            backgroundColor: "#16a34a",
+        }],
+    },
+    options: {
+        maintainAspectRatio: false,
+        indexAxis: "y",
+        plugins: {
+            legend: {
+                display: false,
+            },
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+            },
+        },
+    },
+});
+</script>
 {% endblock %}

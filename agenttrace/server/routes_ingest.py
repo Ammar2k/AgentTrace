@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from agenttrace.server.db import get_db
 from agenttrace.server.models import AgentExecution, Message, ToolCall, WorkflowRun
+from agenttrace.server.pricing import cost_of
 from agenttrace.server.schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionUpdate,
     MessageCreate, MessageResponse,
@@ -36,8 +37,8 @@ def finish_run(run_id: str, body: RunUpdate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Run not found")
     run.status = body.status
     run.ended_at = body.ended_at
-    run.total_tokens = body.total_tokens
-    run.total_cost_usd = body.total_cost_usd
+    run.total_tokens = sum(execution.tokens_in + execution.tokens_out for execution in run.executions)
+    run.total_cost_usd = sum(execution.cost_usd for execution in run.executions)
     db.commit()
     db.refresh(run)
     return run
@@ -73,6 +74,7 @@ def finish_execution(execution_id: str, body: ExecutionUpdate, db: Session = Dep
     execution.error = body.error
     execution.tokens_in = body.tokens_in
     execution.tokens_out = body.tokens_out
+    execution.cost_usd = cost_of(execution.model, body.tokens_in, body.tokens_out)
     execution.retry_count = body.retry_count
     db.commit()
     db.refresh(execution)

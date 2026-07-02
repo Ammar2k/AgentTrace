@@ -23,6 +23,38 @@
 {% endif %}
 
 <section>
+    <h2>Agent Summary</h2>
+    {% if run.agent_summary %}
+    <table>
+        <thead>
+            <tr>
+                <th>Agent</th>
+                <th>Calls</th>
+                <th>Failures</th>
+                <th>Duration</th>
+                <th>Tokens</th>
+                <th>Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for agent in run.agent_summary %}
+            <tr>
+                <td>{{ agent.agent_name }}</td>
+                <td>{{ agent.calls }}</td>
+                <td>{{ agent.failures }}</td>
+                <td>{{ "%.3f"|format(agent.total_duration_seconds) }}s</td>
+                <td>{{ agent.total_tokens }} ({{ agent.tokens_in }} in / {{ agent.tokens_out }} out)</td>
+                <td>${{ "%.6f"|format(agent.total_cost_usd) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No agent executions recorded for this run.</p>
+    {% endif %}
+</section>
+
+<section>
     <h2>Timeline</h2>
     {% if run.executions %}
     <div class="timeline">
@@ -70,6 +102,8 @@
                 <dd>{{ execution.ended_at or "" }}</dd>
                 <dt>Tokens</dt>
                 <dd>{{ execution.tokens_in }} in / {{ execution.tokens_out }} out</dd>
+                <dt>Cost</dt>
+                <dd>${{ "%.6f"|format(execution.cost_usd) }}</dd>
             </dl>
 
             {% if execution.input %}

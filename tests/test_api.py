@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import sleep
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,7 +84,8 @@ def test_get_run_returns_nested_trace_data(client):
         json={
             "status": "completed",
             "ended_at": datetime.utcnow().isoformat(),
-            "total_tokens": 15,
+            "total_tokens": 999,
+            "total_cost_usd": 999,
         },
     )
 
@@ -94,11 +96,13 @@ def test_get_run_returns_nested_trace_data(client):
     assert body["name"] == "query-test"
     assert body["metadata"] == {"source": "test"}
     assert body["total_tokens"] == 15
+    assert body["total_cost_usd"] == pytest.approx(0.00002)
     assert body["executions"][0]["agent_name"] == "researcher"
     assert body["executions"][0]["input"] == {"topic": "observability"}
     assert body["executions"][0]["output"] == {"result": "done"}
     assert body["executions"][0]["tokens_in"] == 10
     assert body["executions"][0]["tokens_out"] == 5
+    assert body["executions"][0]["cost_usd"] == pytest.approx(0.00002)
     assert body["executions"][0]["tool_calls"][0]["tool_name"] == "web_search"
     assert body["executions"][0]["tool_calls"][0]["arguments"] == {"q": "observability"}
     assert body["messages"][0]["from_agent"] == "researcher"
@@ -108,6 +112,7 @@ def test_get_run_returns_nested_trace_data(client):
 
 def test_list_runs_returns_newest_first(client):
     first = client.post("/api/runs", json={"name": "first"}).json()
+    sleep(0.001)
     second = client.post("/api/runs", json={"name": "second"}).json()
 
     response = client.get("/api/runs")
@@ -123,22 +128,122 @@ def test_get_run_returns_404_for_unknown_id(client):
     assert response.json() == {"detail": "Run not found"}
 
 
+def test_get_run_includes_agent_summary(client):
+    run = client.post("/api/runs", json={"name": "summary-run"}).json()
+
+    researcher_first = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "researcher", "model": "demo-model"},
+    ).json()
+    researcher_second = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "researcher", "model": "demo-model"},
+    ).json()
+    writer = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "writer", "model": "demo-model"},
+    ).json()
+
+    client.patch(
+        f"/api/executions/{researcher_first['id']}",
+        json={
+            "status": "completed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "tokens_in": 10,
+            "tokens_out": 5,
+        },
+    )
+    client.patch(
+        f"/api/executions/{researcher_second['id']}",
+        json={
+            "status": "failed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "tokens_in": 20,
+            "tokens_out": 10,
+        },
+    )
+    client.patch(
+        f"/api/executions/{writer['id']}",
+        json={
+            "status": "completed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "tokens_in": 100,
+            "tokens_out": 50,
+        },
+    )
+
+    response = client.get(f"/api/runs/{run['id']}")
+
+    assert response.status_code == 200
+    summary = {
+        item["agent_name"]: item
+        for item in response.json()["agent_summary"]
+    }
+    assert summary["researcher"]["calls"] == 2
+    assert summary["researcher"]["failures"] == 1
+    assert summary["researcher"]["tokens_in"] == 30
+    assert summary["researcher"]["tokens_out"] == 15
+    assert summary["researcher"]["total_tokens"] == 45
+    assert summary["researcher"]["total_cost_usd"] == pytest.approx(0.00006)
+    assert summary["writer"]["calls"] == 1
+    assert summary["writer"]["total_tokens"] == 150
+    assert summary["writer"]["total_cost_usd"] == pytest.approx(0.0002)
+
+
 def test_dashboard_home_renders_runs(client):
-    client.post("/api/runs", json={"name": "dashboard-run"})
+    run = client.post("/api/runs", json={"name": "dashboard-run"}).json()
+    execution = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "researcher", "model": "demo-model"},
+    ).json()
+    client.patch(
+        f"/api/executions/{execution['id']}",
+        json={
+            "status": "completed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "tokens_in": 10,
+            "tokens_out": 5,
+        },
+    )
+    client.patch(
+        f"/api/runs/{run['id']}",
+        json={
+            "status": "completed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "total_tokens": 999,
+            "total_cost_usd": 999,
+        },
+    )
 
     response = client.get("/")
 
     assert response.status_code == 200
     assert "dashboard-run" in response.text
     assert "AgentTrace" in response.text
+    assert "Cost per Run" in response.text
+    assert "Average Latency by Agent" in response.text
+    assert "cost-chart" in response.text
+    assert "latency-chart" in response.text
+    assert '"labels": ["dashboard-run"]' in response.text
+    assert '"values": [2e-05]' in response.text
+    assert '"labels": ["researcher"]' in response.text
 
 
 def test_dashboard_run_detail_renders_nested_trace_data(client):
     run = client.post("/api/runs", json={"name": "dashboard-detail"}).json()
     execution = client.post(
         f"/api/runs/{run['id']}/executions",
-        json={"agent_name": "researcher"},
+        json={"agent_name": "researcher", "model": "demo-model"},
     ).json()
+    client.patch(
+        f"/api/executions/{execution['id']}",
+        json={
+            "status": "completed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "tokens_in": 10,
+            "tokens_out": 5,
+        },
+    )
     client.post(
         f"/api/executions/{execution['id']}/tool-calls",
         json={"tool_name": "web_search"},
@@ -155,6 +260,8 @@ def test_dashboard_run_detail_renders_nested_trace_data(client):
     assert "researcher" in response.text
     assert "web_search" in response.text
     assert "writer" in response.text
+    assert "Agent Summary" in response.text
+    assert "$0.000020" in response.text
 
 
 def test_dashboard_run_graph_groups_messages(client):
