@@ -108,6 +108,24 @@ def test_trace_agent_records_tokens_tool_call_and_message():
     assert ("finish_run", "run-1", "completed") in client.calls
 
 
+def test_trace_agent_records_passive_retry_count_from_usage():
+    client = FakeClient()
+    tracer = make_tracer(client)
+    calls = []
+
+    @tracer.trace_agent("researcher", model="demo-model")
+    def research():
+        calls.append("called")
+        return "notes", {"tokens_in": 12, "tokens_out": 7, "retry_count": 2}
+
+    with tracer.trace_run("retry-metadata-run"):
+        result = research()
+
+    assert result == "notes"
+    assert calls == ["called"]
+    assert ("finish_execution", "execution-1", "completed", {"result": "'notes'"}, None, 12, 7, 2) in client.calls
+
+
 def test_trace_agent_records_failure_and_reraises():
     client = FakeClient()
     tracer = make_tracer(client)

@@ -90,6 +90,7 @@ class AgentTrace:
                             output={"result": repr(result)},
                             tokens_in=usage["tokens_in"],
                             tokens_out=usage["tokens_out"],
+                            retry_count=usage["retry_count"],
                         )
                     return result
                 finally:
@@ -170,12 +171,14 @@ def _summarize_call(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, 
 def _split_result_and_usage(result: Any) -> tuple[Any, dict[str, int]]:
     if _looks_like_usage_result(result):
         value, usage = result
+        # retry_count is passive workflow metadata: the SDK reports it but never retries user code.
         return value, {
             "tokens_in": int(usage.get("tokens_in", 0)),
             "tokens_out": int(usage.get("tokens_out", 0)),
+            "retry_count": int(usage.get("retry_count", 0)),
         }
 
-    return result, {"tokens_in": 0, "tokens_out": 0}
+    return result, {"tokens_in": 0, "tokens_out": 0, "retry_count": 0}
 
 
 def _looks_like_usage_result(result: Any) -> bool:
@@ -183,5 +186,9 @@ def _looks_like_usage_result(result: Any) -> bool:
         isinstance(result, tuple)
         and len(result) == 2
         and isinstance(result[1], dict)
-        and ("tokens_in" in result[1] or "tokens_out" in result[1])
+        and (
+            "tokens_in" in result[1]
+            or "tokens_out" in result[1]
+            or "retry_count" in result[1]
+        )
     )
