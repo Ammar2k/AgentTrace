@@ -36,6 +36,8 @@ class AgentExecution(Base):
     agent_name: Mapped[str] = mapped_column(String, nullable=False)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="running")  # running | completed | failed
+    error_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)  # traceback on failure
     input_: Mapped[str | None] = mapped_column("input", Text, nullable=True)   # stored as JSON string
     output: Mapped[str | None] = mapped_column(Text, nullable=True)            # stored as JSON string

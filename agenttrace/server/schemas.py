@@ -46,6 +46,8 @@ class ExecutionUpdate(BaseModel):
     status: str  # completed | failed
     ended_at: datetime
     output: dict[str, Any] | None = None
+    error_type: str | None = None
+    error_message: str | None = None
     error: str | None = None
     tokens_in: int = 0
     tokens_out: int = 0
@@ -69,6 +71,8 @@ class ExecutionResponse(BaseModel):
 class ExecutionDetailResponse(ExecutionResponse):
     input: dict[str, Any] | None = None
     output: dict[str, Any] | None = None
+    error_type: str | None = None
+    error_message: str | None = None
     error: str | None = None
     retry_count: int
     duration_seconds: float = 0.0

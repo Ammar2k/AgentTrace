@@ -76,6 +76,8 @@ class AgentTrace:
                             execution_id,
                             "failed",
                             datetime.utcnow(),
+                            error_type=type(exc).__name__,
+                            error_message=str(exc),
                             error=traceback.format_exc(),
                         )
                     raise

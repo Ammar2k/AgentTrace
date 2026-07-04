@@ -190,6 +190,128 @@ def test_get_run_includes_agent_summary(client):
     assert summary["writer"]["total_cost_usd"] == pytest.approx(0.0002)
 
 
+def test_finish_execution_stores_structured_error_fields(client):
+    run = client.post("/api/runs", json={"name": "error-run"}).json()
+    execution = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "writer", "model": "demo-model"},
+    ).json()
+
+    finish_response = client.patch(
+        f"/api/executions/{execution['id']}",
+        json={
+            "status": "failed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "error_type": "ValueError",
+            "error_message": "bad draft",
+            "error": "Traceback...\nValueError: bad draft",
+            "retry_count": 1,
+        },
+    )
+    run_response = client.get(f"/api/runs/{run['id']}")
+
+    assert finish_response.status_code == 200
+    body = run_response.json()
+    failed_execution = body["executions"][0]
+    assert failed_execution["status"] == "failed"
+    assert failed_execution["error_type"] == "ValueError"
+    assert failed_execution["error_message"] == "bad draft"
+    assert failed_execution["error"] == "Traceback...\nValueError: bad draft"
+    assert failed_execution["retry_count"] == 1
+
+
+def test_dashboard_run_detail_renders_structured_error_and_retry_count(client):
+    run = client.post("/api/runs", json={"name": "failed-detail"}).json()
+    execution = client.post(
+        f"/api/runs/{run['id']}/executions",
+        json={"agent_name": "writer", "model": "demo-model"},
+    ).json()
+    client.patch(
+        f"/api/executions/{execution['id']}",
+        json={
+            "status": "failed",
+            "ended_at": datetime.utcnow().isoformat(),
+            "error_type": "ValueError",
+            "error_message": "bad draft",
+            "error": "Traceback...\nValueError: bad draft",
+            "retry_count": 2,
+        },
+    )
+
+    response = client.get(f"/runs/{run['id']}")
+
+    assert response.status_code == 200
+    assert "Retries" in response.text
+    assert "<dd>2</dd>" in response.text
+    assert "Error Summary" in response.text
+    assert "ValueError" in response.text
+    assert "bad draft" in response.text
+    assert "Traceback..." in response.text
+
+
+def test_failures_dashboard_groups_failed_executions(client):
+    first_run = client.post("/api/runs", json={"name": "first-failure"}).json()
+    second_run = client.post("/api/runs", json={"name": "second-failure"}).json()
+    third_run = client.post("/api/runs", json={"name": "third-failure"}).json()
+
+    first_writer = client.post(
+        f"/api/runs/{first_run['id']}/executions",
+        json={"agent_name": "writer", "model": "demo-model"},
+    ).json()
+    second_writer = client.post(
+        f"/api/runs/{second_run['id']}/executions",
+        json={"agent_name": "writer", "model": "demo-model"},
+    ).json()
+    critic = client.post(
+        f"/api/runs/{third_run['id']}/executions",
+        json={"agent_name": "critic", "model": "demo-model"},
+    ).json()
+
+    client.patch(
+        f"/api/executions/{first_writer['id']}",
+        json={
+            "status": "failed",
+            "ended_at": "2026-07-04T10:00:00",
+            "error_type": "ValueError",
+            "error_message": "first bad draft",
+            "error": "Traceback...",
+        },
+    )
+    client.patch(
+        f"/api/executions/{second_writer['id']}",
+        json={
+            "status": "failed",
+            "ended_at": "2026-07-04T10:05:00",
+            "error_type": "ValueError",
+            "error_message": "second bad draft",
+            "error": "Traceback...",
+        },
+    )
+    client.patch(
+        f"/api/executions/{critic['id']}",
+        json={
+            "status": "failed",
+            "ended_at": "2026-07-04T10:10:00",
+            "error_type": "RuntimeError",
+            "error_message": "review failed",
+            "error": "Traceback...",
+        },
+    )
+
+    response = client.get("/failures")
+
+    assert response.status_code == 200
+    assert "Failures" in response.text
+    assert "writer" in response.text
+    assert "ValueError" in response.text
+    assert "<td>2</td>" in response.text
+    assert "second bad draft" in response.text
+    assert f"/runs/{second_run['id']}" in response.text
+    assert "critic" in response.text
+    assert "RuntimeError" in response.text
+    assert "review failed" in response.text
+
+
 def test_dashboard_home_renders_runs(client):
     run = client.post("/api/runs", json={"name": "dashboard-run"}).json()
     execution = client.post(

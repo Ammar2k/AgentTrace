@@ -104,6 +104,8 @@
                 <dd>{{ execution.tokens_in }} in / {{ execution.tokens_out }} out</dd>
                 <dt>Cost</dt>
                 <dd>${{ "%.6f"|format(execution.cost_usd) }}</dd>
+                <dt>Retries</dt>
+                <dd>{{ execution.retry_count }}</dd>
             </dl>
 
             {% if execution.input %}
@@ -114,6 +116,16 @@
             {% if execution.output %}
             <h4>Output</h4>
             <pre>{{ execution.output }}</pre>
+            {% endif %}
+
+            {% if execution.error_type or execution.error_message %}
+            <h4>Error Summary</h4>
+            <dl>
+                <dt>Type</dt>
+                <dd>{{ execution.error_type or "" }}</dd>
+                <dt>Message</dt>
+                <dd>{{ execution.error_message or "" }}</dd>
+            </dl>
             {% endif %}
 
             {% if execution.error %}

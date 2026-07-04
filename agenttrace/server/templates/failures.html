@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Failures - AgentTrace{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <h1>Failures</h1>
+</section>
+
+{% if failure_groups %}
+<table>
+    <thead>
+        <tr>
+            <th>Agent</th>
+            <th>Error Type</th>
+            <th>Count</th>
+            <th>Last Seen</th>
+            <th>Latest Message</th>
+            <th>Latest Run</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for failure in failure_groups %}
+        <tr>
+            <td>{{ failure.agent_name }}</td>
+            <td>{{ failure.error_type }}</td>
+            <td>{{ failure.count }}</td>
+            <td>{{ failure.last_seen }}</td>
+            <td>{{ failure.latest_error_message }}</td>
+            <td><a href="/runs/{{ failure.latest_run_id }}">Open run</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">No failed executions recorded yet.</p>
+{% endif %}
+{% endblock %}

@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from agenttrace.server.db import get_db
-from agenttrace.server.models import WorkflowRun
+from agenttrace.server.models import AgentExecution, WorkflowRun
 from agenttrace.server.schemas import RunDetailResponse, RunResponse
 
 router = APIRouter(prefix="/api")
@@ -66,6 +66,23 @@ def dashboard_run_detail(run_id: str, request: Request, db: Session = Depends(ge
     )
 
 
+@dashboard_router.get("/failures")
+def dashboard_failures(request: Request, db: Session = Depends(get_db)):
+    failed_executions = (
+        db.query(AgentExecution)
+        .filter(AgentExecution.status == "failed")
+        .order_by(AgentExecution.ended_at.desc())
+        .all()
+    )
+    return templates.TemplateResponse(
+        request,
+        "failures.html",
+        {
+            "failure_groups": _failure_groups(failed_executions),
+        },
+    )
+
+
 @dashboard_router.get("/runs/{run_id}/graph")
 def dashboard_run_graph(run_id: str, request: Request, db: Session = Depends(get_db)):
     run = db.get(WorkflowRun, run_id)
@@ -98,6 +115,8 @@ def _run_detail(run: WorkflowRun) -> dict[str, Any]:
             "cost_usd": execution.cost_usd,
             "input": _load_json(execution.input_),
             "output": _load_json(execution.output),
+            "error_type": execution.error_type,
+            "error_message": execution.error_message,
             "error": execution.error,
             "retry_count": execution.retry_count,
             "tool_calls": [
@@ -252,6 +271,37 @@ def _latency_chart(runs: list[WorkflowRun]) -> dict[str, list[Any]]:
         "labels": [summary["agent_name"] for summary in summaries],
         "values": [summary["average_duration_seconds"] for summary in summaries],
     }
+
+
+def _failure_groups(executions: list[AgentExecution]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for execution in executions:
+        error_type = execution.error_type or "UnknownError"
+        key = (execution.agent_name, error_type)
+        ended_at = execution.ended_at or execution.started_at
+
+        if key not in groups:
+            groups[key] = {
+                "agent_name": execution.agent_name,
+                "error_type": error_type,
+                "count": 0,
+                "last_seen": ended_at,
+                "latest_error_message": execution.error_message or "",
+                "latest_run_id": execution.run_id,
+            }
+
+        group = groups[key]
+        group["count"] += 1
+        if ended_at >= group["last_seen"]:
+            group["last_seen"] = ended_at
+            group["latest_error_message"] = execution.error_message or ""
+            group["latest_run_id"] = execution.run_id
+
+    return sorted(
+        groups.values(),
+        key=lambda group: (-group["count"], group["agent_name"], group["error_type"]),
+    )
 
 
 def _message_edges(run: WorkflowRun) -> list[dict[str, Any]]:

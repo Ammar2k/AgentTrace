@@ -31,6 +31,8 @@ class FakeClient:
         status,
         ended_at,
         output=None,
+        error_type=None,
+        error_message=None,
         error=None,
         tokens_in=0,
         tokens_out=0,
@@ -42,6 +44,8 @@ class FakeClient:
                 execution_id,
                 status,
                 output,
+                error_type,
+                error_message,
                 error,
                 tokens_in,
                 tokens_out,
@@ -104,7 +108,7 @@ def test_trace_agent_records_tokens_tool_call_and_message():
     assert ("create_run", "demo-run", {"example": True}) in client.calls
     assert ("create_tool_call", "execution-1", "web_search", {"q": "agent tracing"}, {"hits": 2}, "completed", None) in client.calls
     assert ("create_message", "run-1", "researcher", "writer", {"notes": "notes"}) in client.calls
-    assert ("finish_execution", "execution-1", "completed", {"result": "'notes'"}, None, 12, 7, 0) in client.calls
+    assert ("finish_execution", "execution-1", "completed", {"result": "'notes'"}, None, None, None, 12, 7, 0) in client.calls
     assert ("finish_run", "run-1", "completed") in client.calls
 
 
@@ -123,7 +127,7 @@ def test_trace_agent_records_passive_retry_count_from_usage():
 
     assert result == "notes"
     assert calls == ["called"]
-    assert ("finish_execution", "execution-1", "completed", {"result": "'notes'"}, None, 12, 7, 2) in client.calls
+    assert ("finish_execution", "execution-1", "completed", {"result": "'notes'"}, None, None, None, 12, 7, 2) in client.calls
 
 
 def test_trace_agent_records_failure_and_reraises():
@@ -143,8 +147,10 @@ def test_trace_agent_records_failure_and_reraises():
         if call[0] == "finish_execution"
     ][0]
     assert finish_execution[2] == "failed"
-    assert "Traceback (most recent call last)" in finish_execution[4]
-    assert "ValueError: bad draft" in finish_execution[4]
+    assert finish_execution[4] == "ValueError"
+    assert finish_execution[5] == "bad draft"
+    assert "Traceback (most recent call last)" in finish_execution[6]
+    assert "ValueError: bad draft" in finish_execution[6]
     assert ("finish_run", "run-1", "failed") in client.calls
 
 
