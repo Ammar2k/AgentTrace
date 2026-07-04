@@ -2,7 +2,7 @@
 
 AgentTrace is a lightweight observability dashboard for multi-agent AI workflows.
 
-It records workflow runs, agent executions, agent-to-agent messages, tool calls, token usage, estimated cost, retries, and failures. The current implementation is intentionally small: a Python SDK, a FastAPI server, SQLite storage, and server-rendered dashboard pages.
+It records workflow runs, agent executions, agent-to-agent messages, tool calls, token usage, estimated cost, retry metadata, and failures. The current implementation is intentionally small: a Python SDK, a FastAPI server, SQLite storage, and server-rendered dashboard pages.
 
 ## What You Can See
 
@@ -77,7 +77,7 @@ with tracer.trace_run("demo-run", metadata={"example": True}):
 tracer.close()
 ```
 
-The SDK is passive. It records retry counts reported by your workflow, but it does not retry or rerun your agent code.
+`retry_count` is optional metadata for workflows that already track retry attempts.
 
 ## Architecture
 
