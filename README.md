@@ -125,6 +125,15 @@ Remove-Item .\agenttrace.db
 
 The database is recreated automatically when the FastAPI app starts.
 
+## Future Improvements
+
+- Add configurable HTTP timeouts, logging, and a circuit breaker for unavailable servers.
+- Make tracer run and execution state safe for concurrent threads and async tasks.
+- Add sensitive-data redaction, capture controls, and payload-size limits.
+- Make the database URL configurable and tune SQLite for concurrent ingestion.
+- Validate statuses, token counts, and parent execution relationships at the API boundary.
+- Add run pagination, database indexes, and retention or deletion tools for growing datasets.
+
 ## Dependencies
 
 `requirements.txt` is kept deliberately small:
