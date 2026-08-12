@@ -1,16 +1,18 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from agenttrace.server.db import get_db
-from agenttrace.server.models import AgentExecution, Message, ToolCall, WorkflowRun
+from agenttrace.server.models import AgentExecution, Message, ToolCall, WorkflowEvent, WorkflowRun
 from agenttrace.server.pricing import cost_of
 from agenttrace.server.schemas import (
     ExecutionCreate, ExecutionResponse, ExecutionUpdate,
     MessageCreate, MessageResponse,
     RunCreate, RunResponse, RunUpdate,
     ToolCallCreate, ToolCallResponse,
+    WorkflowEventCreate, WorkflowEventResponse,
 )
 
 router = APIRouter(prefix="/api")
@@ -121,3 +123,94 @@ def create_message(run_id: str, body: MessageCreate, db: Session = Depends(get_d
     db.commit()
     db.refresh(message)
     return message
+
+
+# --- WorkflowEvent ---
+
+@router.post("/runs/{run_id}/events", response_model=WorkflowEventResponse, status_code=201)
+def create_workflow_event(
+    run_id: str,
+    body: WorkflowEventCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    if not db.get(WorkflowRun, run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    existing_event = _event_by_idempotency_key(db, run_id, body.idempotency_key)
+    if existing_event is not None:
+        response.status_code = 200
+        return _workflow_event_response(existing_event)
+
+    _validate_event_reference(db, run_id, body.parent_event_id, "parent_event_id")
+    _validate_event_reference(db, run_id, body.causation_id, "causation_id")
+
+    event = WorkflowEvent(
+        run_id=run_id,
+        event_type=body.event_type,
+        occurred_at=body.occurred_at,
+        task_id=body.task_id,
+        parent_event_id=body.parent_event_id,
+        causation_id=body.causation_id,
+        idempotency_key=body.idempotency_key,
+        payload_=json.dumps(body.payload),
+    )
+    db.add(event)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing_event = _event_by_idempotency_key(db, run_id, body.idempotency_key)
+        if existing_event is None:
+            raise
+        response.status_code = 200
+        return _workflow_event_response(existing_event)
+    db.refresh(event)
+    return _workflow_event_response(event)
+
+
+def _validate_event_reference(
+    db: Session,
+    run_id: str,
+    event_id: str | None,
+    field_name: str,
+) -> None:
+    if event_id is None:
+        return
+
+    event = db.get(WorkflowEvent, event_id)
+    if event is None:
+        raise HTTPException(status_code=422, detail=f"{field_name} does not reference an event")
+    if event.run_id != run_id:
+        raise HTTPException(status_code=422, detail=f"{field_name} must reference an event in the same run")
+
+
+def _event_by_idempotency_key(
+    db: Session,
+    run_id: str,
+    idempotency_key: str | None,
+) -> WorkflowEvent | None:
+    if idempotency_key is None:
+        return None
+    return (
+        db.query(WorkflowEvent)
+        .filter(
+            WorkflowEvent.run_id == run_id,
+            WorkflowEvent.idempotency_key == idempotency_key,
+        )
+        .first()
+    )
+
+
+def _workflow_event_response(event: WorkflowEvent) -> dict:
+    return {
+        "id": event.id,
+        "run_id": event.run_id,
+        "event_type": event.event_type,
+        "occurred_at": event.occurred_at,
+        "task_id": event.task_id,
+        "parent_event_id": event.parent_event_id,
+        "causation_id": event.causation_id,
+        "idempotency_key": event.idempotency_key,
+        "payload": json.loads(event.payload_),
+    }

@@ -1,7 +1,22 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+WORKFLOW_EVENT_TYPES = frozenset({
+    "task.started",
+    "task.completed",
+    "route.selected",
+    "action.started",
+    "action.completed",
+    "action.failed",
+    "verification.passed",
+    "verification.failed",
+    "recovery.started",
+    "human.decision",
+    "workflow.stopped",
+})
 
 
 # --- WorkflowRun ---
@@ -138,3 +153,35 @@ class MessageResponse(BaseModel):
 
 class MessageDetailResponse(MessageResponse):
     content: dict[str, Any] | None = None
+
+
+# --- WorkflowEvent ---
+
+class WorkflowEventCreate(BaseModel):
+    event_type: str
+    occurred_at: datetime = Field(default_factory=datetime.utcnow)
+    task_id: str | None = None
+    parent_event_id: str | None = None
+    causation_id: str | None = None
+    idempotency_key: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        if value not in WORKFLOW_EVENT_TYPES:
+            allowed = ", ".join(sorted(WORKFLOW_EVENT_TYPES))
+            raise ValueError(f"event_type must be one of: {allowed}")
+        return value
+
+
+class WorkflowEventResponse(BaseModel):
+    id: str
+    run_id: str
+    event_type: str
+    occurred_at: datetime
+    task_id: str | None
+    parent_event_id: str | None
+    causation_id: str | None
+    idempotency_key: str | None
+    payload: dict[str, Any]

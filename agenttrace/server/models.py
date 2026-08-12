@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from agenttrace.server.db import Base
@@ -25,6 +25,7 @@ class WorkflowRun(Base):
 
     executions: Mapped[list["AgentExecution"]] = relationship(back_populates="run", cascade="all, delete-orphan")
     messages: Mapped[list["Message"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    events: Mapped[list["WorkflowEvent"]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
 
 class AgentExecution(Base):
@@ -81,3 +82,30 @@ class Message(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     run: Mapped["WorkflowRun"] = relationship(back_populates="messages")
+
+
+class WorkflowEvent(Base):
+    """Append-only record of a workflow-level state transition or decision."""
+
+    __tablename__ = "workflow_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "idempotency_key", name="uq_workflow_event_run_idempotency_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
+    run_id: Mapped[str] = mapped_column(ForeignKey("workflow_runs.id"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    task_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    parent_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workflow_events.id"),
+        nullable=True,
+    )
+    causation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workflow_events.id"),
+        nullable=True,
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    payload_: Mapped[str] = mapped_column("payload", Text, nullable=False, default="{}")
+
+    run: Mapped["WorkflowRun"] = relationship(back_populates="events")

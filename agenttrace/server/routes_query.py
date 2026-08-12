@@ -7,8 +7,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from agenttrace.server.db import get_db
-from agenttrace.server.models import AgentExecution, WorkflowRun
-from agenttrace.server.schemas import RunDetailResponse, RunResponse
+from agenttrace.server.models import AgentExecution, WorkflowEvent, WorkflowRun
+from agenttrace.server.schemas import RunDetailResponse, RunResponse, WorkflowEventResponse
 
 router = APIRouter(prefix="/api")
 dashboard_router = APIRouter()
@@ -31,6 +31,33 @@ def get_run(run_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Run not found")
 
     return _run_detail(run)
+
+
+@router.get("/runs/{run_id}/events", response_model=list[WorkflowEventResponse])
+def list_workflow_events(run_id: str, db: Session = Depends(get_db)):
+    if not db.get(WorkflowRun, run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    events = (
+        db.query(WorkflowEvent)
+        .filter(WorkflowEvent.run_id == run_id)
+        .order_by(WorkflowEvent.occurred_at.asc(), WorkflowEvent.id.asc())
+        .all()
+    )
+    return [
+        {
+            "id": event.id,
+            "run_id": event.run_id,
+            "event_type": event.event_type,
+            "occurred_at": event.occurred_at,
+            "task_id": event.task_id,
+            "parent_event_id": event.parent_event_id,
+            "causation_id": event.causation_id,
+            "idempotency_key": event.idempotency_key,
+            "payload": _load_json(event.payload_) or {},
+        }
+        for event in events
+    ]
 
 
 @dashboard_router.get("/")
