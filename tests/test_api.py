@@ -446,3 +446,132 @@ def test_run_detail_includes_execution_timeline(client):
     assert page_response.status_code == 200
     assert "Timeline" in page_response.text
     assert "timeline-bar completed" in page_response.text
+
+
+def test_workflow_events_are_persisted_and_listed_chronologically(client):
+    run = client.post("/api/runs", json={"name": "event-run"}).json()
+
+    completed = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={
+            "event_type": "task.completed",
+            "occurred_at": "2026-08-12T10:00:02",
+            "task_id": "research",
+            "idempotency_key": "research-completed",
+            "payload": {"documents": 3},
+        },
+    )
+    started = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={
+            "event_type": "task.started",
+            "occurred_at": "2026-08-12T10:00:01",
+            "task_id": "research",
+            "idempotency_key": "research-started",
+        },
+    )
+
+    response = client.get(f"/api/runs/{run['id']}/events")
+
+    assert completed.status_code == 201
+    assert started.status_code == 201
+    assert response.status_code == 200
+    assert [event["event_type"] for event in response.json()] == [
+        "task.started",
+        "task.completed",
+    ]
+    assert response.json()[1]["payload"] == {"documents": 3}
+
+
+def test_workflow_events_support_causal_links_within_a_run(client):
+    run = client.post("/api/runs", json={"name": "causal-run"}).json()
+    parent = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={"event_type": "action.failed", "task_id": "write"},
+    ).json()
+
+    recovery = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={
+            "event_type": "recovery.started",
+            "task_id": "write",
+            "parent_event_id": parent["id"],
+            "causation_id": parent["id"],
+        },
+    )
+
+    assert recovery.status_code == 201
+    assert recovery.json()["parent_event_id"] == parent["id"]
+    assert recovery.json()["causation_id"] == parent["id"]
+
+
+def test_workflow_event_rejects_cross_run_causal_links(client):
+    first_run = client.post("/api/runs", json={"name": "first"}).json()
+    second_run = client.post("/api/runs", json={"name": "second"}).json()
+    first_event = client.post(
+        f"/api/runs/{first_run['id']}/events",
+        json={"event_type": "task.started"},
+    ).json()
+
+    response = client.post(
+        f"/api/runs/{second_run['id']}/events",
+        json={
+            "event_type": "task.completed",
+            "parent_event_id": first_event["id"],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "parent_event_id must reference an event in the same run",
+    }
+
+
+def test_workflow_event_rejects_unknown_run_and_event_type(client):
+    missing_run = client.post(
+        "/api/runs/missing/events",
+        json={"event_type": "task.started"},
+    )
+    run = client.post("/api/runs", json={"name": "validation-run"}).json()
+    invalid_type = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={"event_type": "anything.happened"},
+    )
+
+    assert missing_run.status_code == 404
+    assert missing_run.json() == {"detail": "Run not found"}
+    assert invalid_type.status_code == 422
+
+
+def test_workflow_event_idempotency_key_deduplicates_within_a_run(client):
+    run = client.post("/api/runs", json={"name": "idempotent-run"}).json()
+    payload = {
+        "event_type": "task.started",
+        "idempotency_key": "start-research",
+    }
+
+    first = client.post(f"/api/runs/{run['id']}/events", json=payload)
+    duplicate = client.post(f"/api/runs/{run['id']}/events", json=payload)
+    events = client.get(f"/api/runs/{run['id']}/events").json()
+
+    assert first.status_code == 201
+    assert duplicate.status_code == 200
+    assert duplicate.json()["id"] == first.json()["id"]
+    assert len(events) == 1
+
+
+def test_workflow_events_have_no_mutation_endpoints(client):
+    run = client.post("/api/runs", json={"name": "append-only-run"}).json()
+    event = client.post(
+        f"/api/runs/{run['id']}/events",
+        json={"event_type": "workflow.stopped"},
+    ).json()
+
+    patch_response = client.patch(
+        f"/api/runs/{run['id']}/events/{event['id']}",
+        json={"event_type": "task.completed"},
+    )
+    delete_response = client.delete(f"/api/runs/{run['id']}/events/{event['id']}")
+
+    assert patch_response.status_code == 404
+    assert delete_response.status_code == 404

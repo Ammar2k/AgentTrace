@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from agenttrace.server.db import Base, engine
-from agenttrace.server.models import AgentExecution, Message, ToolCall, WorkflowRun  # noqa: F401
+from agenttrace.server.models import AgentExecution, Message, ToolCall, WorkflowEvent, WorkflowRun  # noqa: F401
 from agenttrace.server.routes_ingest import router as ingest_router
 from agenttrace.server.routes_query import dashboard_router, router as query_router
 

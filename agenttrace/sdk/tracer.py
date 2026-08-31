@@ -145,6 +145,31 @@ class AgentTrace:
             content,
         )
 
+    def log_event(
+        self,
+        event_type: str,
+        task_id: str | None = None,
+        parent_event_id: str | None = None,
+        causation_id: str | None = None,
+        idempotency_key: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        """Record a workflow event and return it so callers can link later events."""
+        if not self.current_run_id:
+            return None
+
+        return self._safe_call(
+            self.client.create_event,
+            self.current_run_id,
+            event_type,
+            datetime.utcnow(),
+            task_id,
+            parent_event_id,
+            causation_id,
+            idempotency_key,
+            payload,
+        )
+
     def close(self):
         self.client.close()
 

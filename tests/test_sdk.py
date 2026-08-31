@@ -72,6 +72,32 @@ class FakeClient:
         self.calls.append(("create_message", run_id, from_agent, to_agent, content))
         return {"id": "message-1"}
 
+    def create_event(
+        self,
+        run_id,
+        event_type,
+        occurred_at,
+        task_id=None,
+        parent_event_id=None,
+        causation_id=None,
+        idempotency_key=None,
+        payload=None,
+    ):
+        event = {"id": f"event-{len([call for call in self.calls if call[0] == 'create_event']) + 1}"}
+        self.calls.append(
+            (
+                "create_event",
+                run_id,
+                event_type,
+                task_id,
+                parent_event_id,
+                causation_id,
+                idempotency_key,
+                payload,
+            )
+        )
+        return event
+
     def close(self):
         self.calls.append(("close",))
 
@@ -167,3 +193,53 @@ def test_server_unavailable_warns_once_and_does_not_crash(capsys):
     captured = capsys.readouterr()
     assert result == "still ran"
     assert captured.out.count("AgentTrace warning") == 1
+
+
+def test_log_event_records_causal_workflow_events():
+    client = FakeClient()
+    tracer = make_tracer(client)
+
+    with tracer.trace_run("workflow-run"):
+        started = tracer.log_event(
+            "task.started",
+            task_id="research",
+            idempotency_key="research-started",
+            payload={"topic": "observability"},
+        )
+        completed = tracer.log_event(
+            "task.completed",
+            task_id="research",
+            parent_event_id=started["id"],
+            causation_id=started["id"],
+        )
+
+    assert started == {"id": "event-1"}
+    assert completed == {"id": "event-2"}
+    assert (
+        "create_event",
+        "run-1",
+        "task.started",
+        "research",
+        None,
+        None,
+        "research-started",
+        {"topic": "observability"},
+    ) in client.calls
+    assert (
+        "create_event",
+        "run-1",
+        "task.completed",
+        "research",
+        "event-1",
+        "event-1",
+        None,
+        None,
+    ) in client.calls
+
+
+def test_log_event_outside_run_is_ignored():
+    client = FakeClient()
+    tracer = make_tracer(client)
+
+    assert tracer.log_event("task.started", task_id="research") is None
+    assert not any(call[0] == "create_event" for call in client.calls)

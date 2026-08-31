@@ -79,6 +79,32 @@ tracer.close()
 
 `retry_count` is optional metadata for workflows that already track retry attempts.
 
+## Workflow Events
+
+Record append-only workflow events inside a traced run. `log_event` returns the
+created event so later events can refer to it with `parent_event_id` or
+`causation_id`:
+
+```python
+with tracer.trace_run("review-workflow"):
+    started = tracer.log_event(
+        "task.started",
+        task_id="review",
+        idempotency_key="review-started",
+        payload={"document_id": "doc-123"},
+    )
+    tracer.log_event(
+        "verification.passed",
+        task_id="review",
+        causation_id=started["id"] if started else None,
+    )
+```
+
+Events are created through `POST /api/runs/{run_id}/events` and listed in
+chronological order through `GET /api/runs/{run_id}/events`. They cannot be
+updated or deleted. Reusing an idempotency key within a run returns the original
+event instead of creating a duplicate.
+
 ## Architecture
 
 ```text

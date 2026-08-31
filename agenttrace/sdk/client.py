@@ -127,6 +127,30 @@ class AgentTraceClient:
             },
         )
 
+    def create_event(
+        self,
+        run_id: str,
+        event_type: str,
+        occurred_at: datetime,
+        task_id: str | None = None,
+        parent_event_id: str | None = None,
+        causation_id: str | None = None,
+        idempotency_key: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/runs/{run_id}/events",
+            {
+                "event_type": event_type,
+                "occurred_at": occurred_at,
+                "task_id": task_id,
+                "parent_event_id": parent_event_id,
+                "causation_id": causation_id,
+                "idempotency_key": idempotency_key,
+                "payload": payload or {},
+            },
+        )
+
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._client.post(path, json=_json_ready(payload))
         response.raise_for_status()
